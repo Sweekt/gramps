@@ -1,0 +1,3 @@
+[submodule "gramps-web"]
+	path = gramps-web
+	url = git@github.com:Sweekt/gramps-web.git

@@ -1,0 +1,63 @@
+services:
+  # --- GRAMPS WEB (Backend + Frontend personnalisé) ---
+  grampsweb: &grampsweb
+    image: ghcr.io/gramps-project/grampsweb:latest
+    container_name: grampsweb
+    restart: unless-stopped
+    environment:
+      GRAMPSWEB_TREE: "Arbre Familial"
+      GRAMPSWEB_CELERY_CONFIG__broker_url: "redis://grampsweb_redis:6379/0"
+      GRAMPSWEB_CELERY_CONFIG__result_backend: "redis://grampsweb_redis:6379/0"
+      GRAMPSWEB_RATELIMIT_STORAGE_URI: "redis://grampsweb_redis:6379/1"
+      GRAMPSWEB_BASE_URL: "https://gramps.sweek.ovh"
+    depends_on:
+      - grampsweb_redis
+    volumes:
+      # Montage de ton build personnalisé
+      - ./gramps-web/dist:/app/static:ro
+      - gramps_users:/app/users
+      - gramps_index:/app/indexdir
+      - gramps_thumb_cache:/app/thumbnail_cache
+      - gramps_cache:/app/cache
+      - gramps_media:/app/media
+      - gramps_db:/root/.gramps/grampsdb
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gramps.rule=Host(`gramps.sweek.ovh`)"
+      - "traefik.http.routers.gramps.entrypoints=websecure"
+      - "traefik.http.routers.gramps.tls.certresolver=myresolver"
+      - "traefik.http.services.gramps.loadbalancer.server.port=5000"
+
+  # --- WORKER CELERY ---
+  grampsweb_celery:
+    <<: *grampsweb
+    container_name: grampsweb_celery
+    command: celery -A gramps_webapi.celery worker --loglevel=INFO --concurrency=2
+    labels: []
+    depends_on:
+      - grampsweb_redis
+
+  # --- REDIS / VALKEY ---
+  grampsweb_redis:
+    image: docker.io/valkey/valkey:8-alpine
+    container_name: grampsweb_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+
+volumes:
+  gramps_users:
+  gramps_index:
+  gramps_thumb_cache:
+  gramps_cache:
+  gramps_media:
+  gramps_db:
+  redis_data:
+
+networks:
+  app-network:
+    external: true
